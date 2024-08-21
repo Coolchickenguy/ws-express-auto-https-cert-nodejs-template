@@ -7,10 +7,6 @@ import listen from "./https.js";
 import EventEmitter from "events";
 // @ts-expect-error
 import U from "@root/greenlock/utils.js";
-declare global {
-  var mainEmitter: EventEmitter;
-}
-globalThis.mainEmitter = new EventEmitter();
 const { _validMx } = U;
 const config = configTools.getConfig();
 const oldConfig = { ...configTools.getConfig() };
@@ -88,11 +84,11 @@ if (config.doCert) {
     getCerts(""),
     80
   );
+  server.unref();
   giveServer(server);
   if (oldConfig.subject) {
     removeSite(oldConfig.subject);
   }
-  mainEmitter.on("command.serverKill",server.kill.bind(server));
   await addSite(config.subject);
 }
 console.log("Done!");

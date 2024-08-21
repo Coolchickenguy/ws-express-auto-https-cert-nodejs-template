@@ -16,7 +16,7 @@ type server = {
   ): void;
   endIntercept(): void;
 };
-var server: server | undefined;
+let server: server | undefined;
 export function giveServer(inputServer: server) {
   server = inputServer;
 }
@@ -111,26 +111,33 @@ export function create() {
           });
           // Pass the server the first socket
           server.emit("connection", sock1);
-          http.request({
-            // Make the http server write the request to the tcp server
-            createConnection: function () {
-              return sock2;
-            },
-            hostname: "localhost",
-            port: 80,
-            path: path.posix.join("/.well-known/acme-challenges/", ch.token),
-            method: "GET",
-          },function(responce){
-            const data:Buffer[] = [];
-            responce.on("data",Array.prototype.push.bind(data));
-            responce.on("end",function(){
-                const dataBuffer = Buffer.concat(data);
-                console.log(dataBuffer.toString())
-                resolve({ keyAuthorization: dataBuffer.toString()});
-            });
-          }).end();
-        }else{
-            resolve(null);
+          http
+            .request(
+              {
+                // Make the http server write the request to the tcp server
+                createConnection: function () {
+                  return sock2;
+                },
+                hostname: "localhost",
+                port: 80,
+                path: path.posix.join(
+                  "/.well-known/acme-challenges/",
+                  ch.token
+                ),
+                method: "GET",
+              },
+              function (responce) {
+                const data: Buffer[] = [];
+                responce.on("data", Array.prototype.push.bind(data));
+                responce.on("end", function () {
+                  const dataBuffer = Buffer.concat(data);
+                  resolve({ keyAuthorization: dataBuffer.toString() });
+                });
+              }
+            )
+            .end();
+        } else {
+          resolve(null);
         }
       });
     },
@@ -138,10 +145,6 @@ export function create() {
     remove: function (): Promise<null> {
       // console.log('Remove Key Auth URL', data);
       server?.endIntercept();
-      if(mainEmitter){
-        // Kill the server
-        mainEmitter.emit("command.serverKill");
-      }
       return Promise.resolve(null);
     },
   };

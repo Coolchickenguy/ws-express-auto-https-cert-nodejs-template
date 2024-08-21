@@ -62,10 +62,18 @@ export function listen(
      * Stop intercepting requests
      */
     endIntercept(): void;
-    get secureServer():http.Server;
-    set secureServer(value:http.Server);
-    get insecureServer():http.Server;
-    set insecureServer(value:http.Server);
+    /**
+     * Ref the server
+     */
+    ref(): void;
+    /**
+     * Unref the server
+     */
+    unref(): void;
+    get secureServer(): http.Server;
+    set secureServer(value: http.Server);
+    get insecureServer(): http.Server;
+    set insecureServer(value: http.Server);
   }) => void
 ) {
   // The normal server ( MUST be http or else it will try sorting the encription out itself and will fail in this configuration)
@@ -194,17 +202,29 @@ export function listen(
           tcpserver.addListener("connection", connectionListener);
           this.#intercepter = undefined;
         }
-        get secureServer():http.Server{
-            return server;
+        /**
+         * Ref the server
+         */
+        ref(): void {
+          tcpserver.ref();
         }
-        set secureServer(value:http.Server){
-            server = value;
+        /**
+         * Unref the server
+         */
+        unref(): void {
+          tcpserver.unref();
         }
-        get insecureServer():http.Server{
-            return redirectServer;
+        get secureServer(): http.Server {
+          return server;
         }
-        set insecureServer(value:http.Server){
-            redirectServer = value;
+        set secureServer(value: http.Server) {
+          server = value;
+        }
+        get insecureServer(): http.Server {
+          return redirectServer;
+        }
+        set insecureServer(value: http.Server) {
+          redirectServer = value;
         }
       })()
     )
