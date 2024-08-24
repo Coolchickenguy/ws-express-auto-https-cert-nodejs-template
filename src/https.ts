@@ -47,10 +47,9 @@ export function listen(
         typeof http.ServerResponse
       >
     ): void;
-    get intercepter(): undefined | ((socket: net.Socket) => void);
     /**
      * Start intercepting requests
-     * @param callbackFunction The callback for intercepted requests. Return true to continue.
+     * @param callbackFunction The callback for intercepted requests.
      */
     startIntercept(
       callbackFunction: (
@@ -61,7 +60,19 @@ export function listen(
     /**
      * Stop intercepting requests
      */
-    endIntercept(): void;
+    removeIntercept(
+      callbackFunction: (
+        request: Buffer,
+        socket: net.Socket
+      ) => true | void | Promise<true | void>
+    ): void;
+    /**
+     * The callbacks for request interception
+     */
+    get interceptCallbacks(): ((
+      request: Buffer,
+      socket: net.Socket
+    ) => true | void | Promise<true | void>)[];
     /**
      * Ref the server
      */
@@ -70,6 +81,10 @@ export function listen(
      * Unref the server
      */
     unref(): void;
+    /**
+     * The function passed to the tcp server to intercept requests from the default callback
+     */
+    get requestIntercepter(): (socket: net.Socket) => void;
     get secureServer(): http.Server;
     set secureServer(value: http.Server);
     get insecureServer(): http.Server;
@@ -156,9 +171,33 @@ export function listen(
         /**
          * The request intercepter function
          */
-        #intercepter: undefined | ((socket: net.Socket) => void);
-        get intercepter() {
-          return this.#intercepter;
+        // Use arrow function to avoid "this" being set to the server (I dont want to bind)
+        #intercepter = (socket: net.Socket) => {
+          socket.once("data", (data: Buffer) => {
+            // Buffer incomeing data
+            socket.pause();
+            (async () => {
+              for (const callback of this.interceptCallbacks) {
+                const out = await callback(data, socket);
+                if (out === true) {
+                  process.nextTick(() => socket.resume());
+                  return;
+                }
+              }
+              dataHandler(data, socket);
+              process.nextTick(() => socket.resume());
+            })();
+          });
+        };
+        #interceptCallbacks: ((
+          request: Buffer,
+          socket: net.Socket
+        ) => true | void | Promise<true | void>)[] = [];
+        get interceptCallbacks(): ((
+          request: Buffer,
+          socket: net.Socket
+        ) => true | void | Promise<true | void>)[] {
+          return this.#interceptCallbacks;
         }
         /**
          * Start intercepting requests
@@ -170,37 +209,38 @@ export function listen(
             socket: net.Socket
           ) => true | void | Promise<true | void>
         ): void {
-          this.#intercepter = (socket: net.Socket) => {
-            socket.once("data", (data: Buffer) => {
-              // Buffer incomeing requests
-              socket.pause();
-              const out = callbackFunction(data, socket);
-              const onDone = (out: void | true) => {
-                if (out !== true) {
-                  dataHandler(data, socket);
-                }
-                process.nextTick(() => socket.resume());
-              };
-              if (out instanceof Promise) {
-                out.then(onDone);
-              } else {
-                onDone(out);
-              }
-            });
-          };
-          tcpserver.removeListener("connection", connectionListener);
-          tcpserver.on("connection", this.#intercepter);
+          this.interceptCallbacks.push(callbackFunction);
+          if (tcpserver.listeners("connection")[0] === connectionListener) {
+            tcpserver.removeListener("connection", connectionListener);
+            tcpserver.on("connection", this.#intercepter);
+          }
         }
         /**
          * Stop intercepting requests
+         * @param callbackFunction The callback to remove
          */
-        endIntercept(): void {
-          tcpserver.removeListener(
-            "connection",
-            this.#intercepter as (socket: net.Socket) => void
+        removeIntercept(
+          callbackFunction: (
+            request: Buffer,
+            socket: net.Socket
+          ) => true | void | Promise<true | void>
+        ): void {
+          this.#interceptCallbacks = this.#interceptCallbacks.filter(
+            (value) => value !== callbackFunction
           );
-          tcpserver.addListener("connection", connectionListener);
-          this.#intercepter = undefined;
+          if (
+            this.#interceptCallbacks.length === 0 &&
+            tcpserver.listeners("connection")[0] === this.#intercepter
+          ) {
+            tcpserver.removeListener(
+              "connection",
+              this.#intercepter as (
+                this: typeof this,
+                socket: net.Socket
+              ) => void
+            );
+            tcpserver.addListener("connection", connectionListener);
+          }
         }
         /**
          * Ref the server
@@ -213,6 +253,9 @@ export function listen(
          */
         unref(): void {
           tcpserver.unref();
+        }
+        get requestIntercepter(): (socket: net.Socket) => void {
+          return this.#intercepter;
         }
         get secureServer(): http.Server {
           return server;
