@@ -98,7 +98,7 @@ export function listen(
   const makeInsecureServer = () =>
     http.createServer(options, function (req, res) {
       res.writeHead(302, {
-        location: `https://${req.headers.host || "" + req.url}`,
+        location: `https://${req.headers.host || "localhost" + req.url}`,
       });
       res.end();
     });
