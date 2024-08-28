@@ -21,13 +21,6 @@ export async function setup() {
     maintainerEmail,
     packageAgent: name + "/" + version,
     packageRoot: root,
-    /*notify: function(event:string, details:any) {
-        if ('error' === event) {
-            // `details` is an error object in this case
-            console.error(details);
-        }
-        console.log(event)
-    }*/
   });
   await inst.manager.defaults({
     agreeToTerms: true,

@@ -1,7 +1,7 @@
 // My own, simple router
 import { exsists } from "./types.js";
 import { isEmpty } from "./utils.js";
-const wildcard = "wildcard"; //Symbol("wildcard");
+const wildcard = Symbol("wildcard");
 type exsampleRouter = routerInstance<{
   use: { satisfiyes: ["get", "post"] };
   get: {};
@@ -11,11 +11,13 @@ type route = {
   precedence: number;
   name: string;
 };
-type routePath = {
-  [key: string]: { routes: route[]; children: routePath[] };
-} & {
-  [key in typeof wildcard]?: { routes: route[]; children: routePath[] };
+type routePathNormal = {
+  [key: string]: { routes: route[]; children: routePath };
 };
+type routePathWildcard = {
+  [key in typeof wildcard]?: routePathNormal[string];
+};
+type routePath = routePathNormal & routePathWildcard;
 type routes = {
   [key: string]: {
     satisfiyedBy: string[];
@@ -23,7 +25,7 @@ type routes = {
   };
 };
 type routeTypesDescriptor = {
-  [key in string]?: { satisfiyes?: string[] };
+  [key:string]: { satisfiyes?: string[] };
 };
 type getRouteTypes<rt> = [
   | keyof rt
@@ -135,14 +137,13 @@ export const router = function requestRouter(
       {
         paths: autoBuild
           ? new Proxy([] as string[], {
-              set(target, p, newValue, receiver) {
+              set(target, p, newValue) {
                 target[p as unknown as number] = newValue;
                 changeModifyed(true);
                 return true;
               },
             })
           : [],
-        //@ts-expect-error
         ...(val in routeTypes && "satisfiyes" in routeTypes[val]
           ? // @ts-ignore
             { satisfiyes: routeTypes[val].satisfiyes }
@@ -153,14 +154,14 @@ export const router = function requestRouter(
 } as any as router;
 router.prototype._routes = {};
 router.prototype._parsePath = function (path: string) {
-  return (path.replace(/\/$/m,"") || "/").split("/");
+  return (path.replace(/\/$/m, "") || "/").split("/");
 };
 router.prototype._precedenceIndex = 0;
 // Avoid lag by converting routes into more easly prossesable form.
 router.prototype.build = function (this: exsampleRouter): void {
   var entries = Object.entries(
     Object.entries(this.routes).reduce(
-      (last, [key, value], index, array) => {
+      (last, [key, value]) => {
         if ("satisfiyes" in value) {
           value.satisfiyes.forEach((val) =>
             "satisfiyedBy" in last[val]
@@ -184,7 +185,7 @@ router.prototype.build = function (this: exsampleRouter): void {
   );
   this._routes = Object.fromEntries(
     entries.map(([key, value]) => {
-      var out: { [key in string]: { routes: route[]; children: routePath[] } } =
+      var out: routePath =
         {};
       value.paths.forEach((val) => {
         const parsed = this._parsePath(
@@ -227,60 +228,26 @@ router.prototype.build = function (this: exsampleRouter): void {
 };
 function routeGeter(
   parsed: string[],
-  route: routePath | routePath[string],
-  cut?: string
-) {
-  var addTo: route[] = [];
-  if (wildcard in route) {
-    addTo.push(
-      ...routeGeter(
-        parsed.slice(typeof cut == "undefined" ? 1 : 0),
-        route[wildcard] as routePath[string]
-      )
-    );
-    //console.log(`Running with ${JSON.stringify(parsed.slice(1))} and ${JSON.stringify(route[wildcard])}. Adding ${JSON.stringify(addTo)}`)
-    //console.log("wildcard")
-  }
-  if (typeof cut != "undefined") {
-    // @ts-ignore
-    route = route[cut];
-  }
-  //console.log(route,"route")
-  return parsed.slice(0).reduce(
-    (building, pathPart, i, array) => {
-      if (wildcard in building.refrence.children) {
-        building.result.push(
-          ...routeGeter(
-            parsed.slice(i),
-            building.refrence.children[wildcard] as routePath[string]
-          )
-        );
-      }
-      // @ts-ignore
-      building.refrence = building.refrence.children[pathPart];
-      if (typeof building.refrence == "undefined") {
-        array.splice(1);
-      } else {
-        building.result.push(...building.refrence.routes);
-      }
-      return building;
-    },
-    {
-      result: [...(route as routePath[string]).routes, ...addTo],
-      refrence: route,
-    } as {
-      result: route[];
-      refrence: routePath[string];
+  route: routePath[string]
+): route[] {
+  let output: route[][] = [];
+  for (let i = 0; i < parsed.length && route !== undefined;i++) {
+    output.push(route.routes);
+    if(wildcard in route.children){
+      output.push(routeGeter(parsed.slice(i+1),route.children[wildcard] as routePathNormal[string]));
     }
-  ).result;
+    route = route.children[parsed[i]];
+  }
+  output.push(route?.routes ?? []);
+  return output.flat(1);
 }
+
 router.prototype.getRoutes = function (
   this: exsampleRouter,
   path: string,
   type: string
 ): any[] {
   var parsed = this._parsePath(path);
-  var cut = parsed.shift() as string;
   if (this._modifyed) {
     this.build();
   }
@@ -291,30 +258,15 @@ router.prototype.getRoutes = function (
       if (isEmpty(route)) {
         return lastVal;
       }
-      //console.log(route,cut)
       lastVal.push(
-        /*...parsed.slice(0).reduce(
-          (building, pathPart,i,array) => {
-            building.refrence = building.refrence.children[pathPart];
-            if(typeof building.refrence == "undefined"){
-              array.splice(1);
-            }else{
-            building.result.push(...building.refrence.routes);
-            }
-            return building;
-          },
-          { result: [...route[cut].routes], refrence: route[cut] } as {
-            result: route[];
-            refrence: routes[string]["paths"][string];
-          }
-        ).result*/
-        ...routeGeter(parsed, route, cut)
+        ...routeGeter(parsed, {children:route,routes:[]})
       );
       return lastVal;
     }, [] as route[])
     .sort((a, b) => (a.precedence > b.precedence ? 1 : -1))
     .map((val) => val.name);
 };
+router.prototype._modifyed = true;
 /*
 var routerDemo = new router({
   use: { satisfiyes: ["get", "post"] },
@@ -323,15 +275,38 @@ var routerDemo = new router({
 });
 //console.log(routerDemo.routes);
 //routerDemo.routes.use.paths.push("/chicken/index.html");
-routerDemo.routes.use.paths.push(["/chicken/bocks/no","The no chicken bocks path!!"]);
-routerDemo.routes.use.paths.push(["/chicken/bocks/no/brook.html","The brook html file"]);
-routerDemo.routes.use.paths.push(["/chicken/bocks","chicken bocks root of use"]);
-routerDemo.routes.get.paths.push(["/chicken/bocks","the chicken bocks root of get"]);
-routerDemo.routes.get.paths.push(["/:chickenrelated/bocks/no/WHATEVER/:file","A wildcard"]);
-routerDemo.routes.get.paths.push(["/hi","A unused GET path"]);
-routerDemo.routes.get.paths.push(["/chicken/bocks/no/*","A end wildcard that is TRUE"]);
-routerDemo.routes.get.paths.push(["/chicken/bocks/no/brook.html/*","A end wildcard that is FALSE"]);
-routerDemo.routes.get.paths.push(["/","root"]);
+routerDemo.routes.use.paths.push([
+  "/chicken/bocks/no",
+  "The no chicken bocks path!! Must include",
+]);
+routerDemo.routes.use.paths.push([
+  "/chicken/bocks/no/brook.html",
+  "The brook html file. Must include.",
+]);
+routerDemo.routes.use.paths.push([
+  "/chicken/bocks",
+  "chicken bocks root of use. Must include.",
+]);
+routerDemo.routes.get.paths.push([
+  "/chicken/bocks",
+  "the chicken bocks root of get. Must include.",
+]);
+routerDemo.routes.get.paths.push([
+  "/:chickenrelated/bocks/no/:file",
+  "A wildcard. Must include.",
+]);
+routerDemo.routes.get.paths.push(["/chicken/:bocks/no/:file", "A wildcard2. Must include."]);
+routerDemo.routes.get.paths.push(["/hi", "A unused GET path. Must not include."]);
+routerDemo.routes.get.paths.push(["/hi/:any", "A unused GET path with wildcards. Must not include."]);
+routerDemo.routes.get.paths.push([
+  "/chicken/bocks/no/*",
+  "A end wildcard that is TRUE. Must include.",
+]);
+routerDemo.routes.get.paths.push([
+  "/chicken/bocks/no/brook.html/*",
+  "A end wildcard that is FALSE. Must NOT include.",
+]);
+routerDemo.routes.get.paths.push(["/", "root"]);
 routerDemo.build();
 //console.log(routerDemo._routes.get.paths,"wildcard");
 console.log(routerDemo.getRoutes("/chicken/bocks/no/brook.html", "get"));

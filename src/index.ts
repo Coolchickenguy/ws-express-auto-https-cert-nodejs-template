@@ -5,9 +5,7 @@ import { getConfig } from "./config.js";
 import { giveServer } from "./http01auth.cjs";
 import configure from "./server/index.js";
 import { wsRouter } from "./server/wsRouter.js";
-import { WebSocketServer } from "ws";
 import { createServer } from "http";
-const webSocketServerInstance = new WebSocketServer({ noServer: true });
 const config = getConfig();
 if (config.doCert) {
   await setup();
@@ -34,26 +32,8 @@ async function refreshCerts(): Promise<void> {
     servers[1].insecureServer = port80RedirectServer;
     servers[1].secureServer = port80RedirectServer;
     // Handle websockets
-    servers[0].secureServer.on("upgrade", (req, socket, head) => {
-      webSocketServerInstance.handleUpgrade(
-        req,
-        socket,
-        head,
-        function (ws, request) {
-          wsRouterInstance.requestHandler(request, ws, true);
-        }
-      );
-    });
-    servers[1].insecureServer.on("upgrade", (req, socket, head) => {
-      webSocketServerInstance.handleUpgrade(
-        req,
-        socket,
-        head,
-        function (ws, request) {
-          wsRouterInstance.requestHandler(request, ws, false);
-        }
-      );
-    });
+    servers[0].secureServer.on("upgrade", wsRouterInstance.upgradeHandler.bind(wsRouterInstance,true));
+    servers[1].insecureServer.on("upgrade", wsRouterInstance.upgradeHandler.bind(wsRouterInstance,false));
     // Give port 80
     giveServer(servers[1]);
   }
