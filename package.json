@@ -1,15 +1,14 @@
 {
   "dependencies": {
     "@root/greenlock": "^4.0.5",
-    "acme-http-01-webroot": "github:Coolchickenguy/acme-http-01",
     "chalk": "^5.3.0",
     "express": "^4.19.2",
     "typescript": "^5.5.4",
     "ws": "^8.18.0"
   },
-  "name": "retrochickengame",
+  "name": "ws-express-auto-https-cert-nodejs-template",
   "version": "1.0.0",
-  "description": "A retro chicken game where the goal is to eat all the grasshopers",
+  "description": "A websocket and express router template with automatic cert genaration and renewal.",
   "main": "index.js",
   "scripts": {
     "test": "node dist/testCert.js",
@@ -19,19 +18,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Coolchickenguy/retroChickenGame.git"
+    "url": "git+https://github.com/Coolchickenguy/ws-express-auto-https-cert-nodejs-template.git"
   },
-  "keywords": [
-    "game",
-    "retro",
-    "chicken"
-  ],
   "author": "Coolchickenguy",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Coolchickenguy/retroChickenGame/issues"
+    "url": "https://github.com/Coolchickenguy/ws-express-auto-https-cert-nodejs-template/issues"
   },
-  "homepage": "https://github.com/Coolchickenguy/retroChickenGame#readme",
+  "homepage": "https://github.com/Coolchickenguy/ws-express-auto-https-cert-nodejs-template#readme",
   "type": "module",
   "devDependencies": {
     "@types/express": "^4.17.21",
