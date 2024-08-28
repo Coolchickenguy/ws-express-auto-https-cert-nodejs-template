@@ -132,7 +132,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# server config
+# Server config
 config.json
-# Cert
+# Greenlock files
 greenlock.d/
+.greenlockrc
