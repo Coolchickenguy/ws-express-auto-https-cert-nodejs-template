@@ -58,7 +58,7 @@ export function getCerts(subject: string): { key: Buffer; cert: Buffer } {
   let certDir = resolve(configDir, "live", subject);
   const certPaths = () => {
     return {
-      cert: resolve(certDir, "cert.pem"),
+      cert: resolve(certDir, "fullchain.pem"),
       key: resolve(certDir, "privkey.pem"),
     };
   };
