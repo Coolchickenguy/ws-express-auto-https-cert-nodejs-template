@@ -11,6 +11,7 @@ if (config.doCert) {
   await setup();
 }
 const app = express();
+app.disable('x-powered-by');
 const wsRouterInstance = new wsRouter();
 configure(app, wsRouterInstance);
 let cert: ReturnType<typeof getCerts>;
