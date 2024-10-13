@@ -49,8 +49,8 @@ export class wsRouter {
     }, 30000);
     socket.on("close", () => clearInterval(interval));
     socket.on("pong", () => (isAlive = true));
-    const run = () =>
-      (routes.shift() || (() => {}))(request,socket, () => process.nextTick(run));
+    const run = async () =>
+      {try {await (routes.shift() || (() => {}))(request,socket, () => process.nextTick(run))}catch(e){console.error(e);socket.close(1011)}};
     run();
   }
 }
