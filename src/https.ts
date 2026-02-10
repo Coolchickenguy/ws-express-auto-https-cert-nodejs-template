@@ -9,7 +9,7 @@ import net from "net";
  * @param app Http request listener
  * @param options Https options
  * @param config The port to host to or the config object
- * @param callbackFunction A callback for whan the server has started
+ * @param callbackFunction A callback for when the server has started
  */
 export function listen(
   app: http.RequestListener<
@@ -29,7 +29,7 @@ export function listen(
       },
   callbackFunction: (serverInstance: {
     /**
-     * If the server has been kiled
+     * If the server has been killed
      */
     get isAlive(): boolean;
     /**
@@ -45,7 +45,7 @@ export function listen(
       newOptions: ServerOptions<
         typeof http.IncomingMessage,
         typeof http.ServerResponse
-      >
+      >,
     ): void;
     /**
      * Start intercepting requests
@@ -54,8 +54,8 @@ export function listen(
     startIntercept(
       callbackFunction: (
         request: Buffer,
-        socket: net.Socket
-      ) => true | void | Promise<true | void>
+        socket: net.Socket,
+      ) => true | void | Promise<true | void>,
     ): void;
     /**
      * Stop intercepting requests
@@ -63,15 +63,15 @@ export function listen(
     removeIntercept(
       callbackFunction: (
         request: Buffer,
-        socket: net.Socket
-      ) => true | void | Promise<true | void>
+        socket: net.Socket,
+      ) => true | void | Promise<true | void>,
     ): void;
     /**
      * The callbacks for request interception
      */
     get interceptCallbacks(): ((
       request: Buffer,
-      socket: net.Socket
+      socket: net.Socket,
     ) => true | void | Promise<true | void>)[];
     /**
      * Ref the server
@@ -84,14 +84,14 @@ export function listen(
     /**
      * The function passed to the tcp server to intercept requests from the default callback
      */
-    get requestIntercepter(): (socket: net.Socket) => void;
+    get requestInterceptor(): (socket: net.Socket) => void;
     get secureServer(): http.Server;
     set secureServer(value: http.Server);
     get insecureServer(): http.Server;
     set insecureServer(value: http.Server);
-  }) => void
+  }) => void,
 ) {
-  // The normal server ( MUST be http or else it will try sorting the encription out itself and will fail in this configuration)
+  // The normal server ( MUST be http or else it will try sorting the encryption out itself and will fail in this configuration)
   // This is just as secure as the normal nodejs https server
   const makeSecureServer = () => http.createServer(options, app);
   // A server that redirect all the requests to https, you could have this be the normal server too.
@@ -121,11 +121,11 @@ export function listen(
       insecureServer: config.insecureServer || makeInsecureServer(),
     };
   }
-  // The tcp server that receves all the requests
-  var tcpserver = net.createServer();
+  // The tcp server that receives all the requests
+  const tcpserver = net.createServer();
 
-  var server = normalizedConfig.secureServer;
-  var redirectServer = normalizedConfig.insecureServer;
+  let server = normalizedConfig.secureServer;
+  let redirectServer = normalizedConfig.insecureServer;
   // Make the proxy server listen
   tcpserver.listen(typeof config === "number" ? config : config.port);
   // Call the callback when the server is ready
@@ -152,7 +152,7 @@ export function listen(
                   }
                 : () => {
                     fail(err);
-                  })()
+                  })(),
             );
           });
         }
@@ -164,7 +164,7 @@ export function listen(
           newOptions: ServerOptions<
             typeof http.IncomingMessage,
             typeof http.ServerResponse
-          >
+          >,
         ): void {
           options = newOptions;
         }
@@ -191,11 +191,11 @@ export function listen(
         };
         #interceptCallbacks: ((
           request: Buffer,
-          socket: net.Socket
+          socket: net.Socket,
         ) => true | void | Promise<true | void>)[] = [];
         get interceptCallbacks(): ((
           request: Buffer,
-          socket: net.Socket
+          socket: net.Socket,
         ) => true | void | Promise<true | void>)[] {
           return this.#interceptCallbacks;
         }
@@ -206,8 +206,8 @@ export function listen(
         startIntercept(
           callbackFunction: (
             request: Buffer,
-            socket: net.Socket
-          ) => true | void | Promise<true | void>
+            socket: net.Socket,
+          ) => true | void | Promise<true | void>,
         ): void {
           this.interceptCallbacks.push(callbackFunction);
           if (tcpserver.listeners("connection")[0] === connectionListener) {
@@ -222,11 +222,11 @@ export function listen(
         removeIntercept(
           callbackFunction: (
             request: Buffer,
-            socket: net.Socket
-          ) => true | void | Promise<true | void>
+            socket: net.Socket,
+          ) => true | void | Promise<true | void>,
         ): void {
           this.#interceptCallbacks = this.#interceptCallbacks.filter(
-            (value) => value !== callbackFunction
+            (value) => value !== callbackFunction,
           );
           if (
             this.#interceptCallbacks.length === 0 &&
@@ -236,8 +236,8 @@ export function listen(
               "connection",
               this.#intercepter as (
                 this: typeof this,
-                socket: net.Socket
-              ) => void
+                socket: net.Socket,
+              ) => void,
             );
             tcpserver.addListener("connection", connectionListener);
           }
@@ -254,7 +254,7 @@ export function listen(
         unref(): void {
           tcpserver.unref();
         }
-        get requestIntercepter(): (socket: net.Socket) => void {
+        get requestInterceptor(): (socket: net.Socket) => void {
           return this.#intercepter;
         }
         get secureServer(): http.Server {
@@ -269,8 +269,8 @@ export function listen(
         set insecureServer(value: http.Server) {
           redirectServer = value;
         }
-      })()
-    )
+      })(),
+    ),
   );
   const dataHandler = (data: Buffer, socket: net.Socket) => {
     // Detect if the provided handshake data is TLS by checking if it starts with 22, which TLS always does
@@ -289,14 +289,14 @@ export function listen(
       // Http
       // Emit the socket to the redirect server
       redirectServer.emit("connection", socket);
-      // Http views the events, meaning I can just refire the eventEmiter
+      // Http views the events, meaning I can just refire the eventEmitter
       socket.emit("data", data);
     }
   };
   const connectionListener = (socket: net.Socket) => {
-    // Detect http or https/tls handskake
-    socket.once("data", (data) => {
-      // Buffer incomeing data
+    // Detect http or https/tls handshake
+    socket.once("data", (data: Buffer) => {
+      // Buffer incoming data
       socket.pause();
       dataHandler(data, socket);
       // Resume socket
@@ -313,7 +313,7 @@ type allBeforeLast<array extends any[]> = array extends [...infer bl, any]
   ? bl
   : never;
 const promisify = function <const value extends (...args: any) => void>(
-  value: value
+  value: value,
 ): (...args: allBeforeLast<Parameters<value>>) => Promise<
   Parameters<
     // @ts-ignore

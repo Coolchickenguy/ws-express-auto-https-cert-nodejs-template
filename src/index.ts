@@ -11,7 +11,7 @@ if (config.doCert) {
   await setup();
 }
 const app = express();
-app.disable('x-powered-by');
+app.disable("x-powered-by");
 const wsRouterInstance = new wsRouter();
 configure(app, wsRouterInstance);
 let cert: ReturnType<typeof getCerts>;
@@ -25,16 +25,19 @@ async function refreshCerts(): Promise<void> {
   } else {
     servers = [await listen(app, cert, 443), await listen(app, cert, 80)];
     const port80RedirectServer = createServer(function (req, res) {
-      res.writeHead(302, {
-        location: `https://${req.headers.host?.replace(/:\d+$/gm,"") || "localhost" + req.url}`,
-      });
-      res.end();
+      app(req, res);
     });
     servers[1].insecureServer = port80RedirectServer;
     servers[1].secureServer = port80RedirectServer;
     // Handle websockets
-    servers[0].secureServer.on("upgrade", wsRouterInstance.upgradeHandler.bind(wsRouterInstance,true));
-    servers[1].insecureServer.on("upgrade", wsRouterInstance.upgradeHandler.bind(wsRouterInstance,false));
+    servers[0].secureServer.on(
+      "upgrade",
+      wsRouterInstance.upgradeHandler.bind(wsRouterInstance, true),
+    );
+    servers[1].insecureServer.on(
+      "upgrade",
+      wsRouterInstance.upgradeHandler.bind(wsRouterInstance, false),
+    );
     // Give port 80
     giveServer(servers[1]);
   }

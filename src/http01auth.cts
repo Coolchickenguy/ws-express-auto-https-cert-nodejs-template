@@ -10,16 +10,16 @@ type server = {
   /**
    * The function passed to the tcp server to intercept requests from the default callback
    */
-  get requestIntercepter(): (socket: Socket) => void
+  get requestInterceptor(): (socket: Socket) => void;
   /**
    * Start intercepting requests
    * @param callbackFunction The callback for intercepted requests.
-   */;
+   */
   startIntercept(
     callbackFunction: (
       request: Buffer,
-      socket: Socket
-    ) => true | void | Promise<true | void>
+      socket: Socket,
+    ) => true | void | Promise<true | void>,
   ): void;
   /**
    * Stop intercepting requests
@@ -27,12 +27,12 @@ type server = {
   removeIntercept(
     callbackFunction: (
       request: Buffer,
-      socket: Socket
-    ) => true | void | Promise<true | void>
+      socket: Socket,
+    ) => true | void | Promise<true | void>,
   ): void;
 };
 let server: server | undefined;
-let requestIntercepter:
+let requestInterceptor:
   | ((request: Buffer, socket: Socket) => true | void | Promise<true | void>)
   | undefined;
 export function giveServer(inputServer: server) {
@@ -49,27 +49,27 @@ export function create() {
 
       var ch = data.challenge;
       if (server?.startIntercept) {
-        var httpServer = http.createServer(function (request, responce) {
+        var httpServer = http.createServer(function (request, response) {
           if (
             request.url ===
               path.posix.join("/.well-known/acme-challenge/", ch.token) ||
             request.url ===
               path.posix.join("/.well-known/acme-challenges/", ch.token)
           ) {
-            responce.end(ch.keyAuthorization);
+            response.end(ch.keyAuthorization);
           } else {
             // @ts-ignore
-            responce.socket.write(Buffer.alloc(0));
+            response.socket.write(Buffer.alloc(0));
             // @ts-ignore
-            responce.socket.end();
+            response.socket.end();
           }
         });
-        requestIntercepter = (request, sock) => {
+        requestInterceptor = (request, sock) => {
           return new Promise<void | true>(function (resolve) {
             const output: Buffer[] = [];
             const captureStream = new Duplex({
               read: function () {},
-              write: function (chunk, _encodeing, cb) {
+              write: function (chunk, _encoding, cb) {
                 output.push(chunk);
                 cb();
               },
@@ -94,7 +94,7 @@ export function create() {
             });
           });
         };
-        server?.startIntercept(requestIntercepter);
+        server?.startIntercept(requestInterceptor);
       }
 
       return Promise.resolve(null);
@@ -104,13 +104,13 @@ export function create() {
       // console.log('List Key Auth URL', data);
 
       var ch = data.challenge;
-      if (!requestIntercepter) {
+      if (!requestInterceptor) {
         return Promise.resolve(null);
       }
       // Do this so the preflight check actually checks anything
-      // It may look like it uses the network, but it 100% does it all in memory for saftey.
+      // It may look like it uses the network, but it 100% does it all in memory for safety.
       return new Promise(function (resolve) {
-        const tcpServer = createServer(server?.requestIntercepter);
+        const tcpServer = createServer(server?.requestInterceptor);
         // A pair of linked Duplex streams
         const sock1: Duplex = new Duplex({
           read() {},
@@ -140,14 +140,14 @@ export function create() {
               path: path.posix.join("/.well-known/acme-challenges/", ch.token),
               method: "GET",
             },
-            function (responce) {
+            function (response) {
               const data: Buffer[] = [];
-              responce.on("data", Array.prototype.push.bind(data));
-              responce.on("end", function () {
+              response.on("data", Array.prototype.push.bind(data));
+              response.on("end", function () {
                 const dataBuffer = Buffer.concat(data);
                 resolve({ keyAuthorization: dataBuffer.toString() });
               });
-            }
+            },
           )
           .end();
       });
@@ -155,9 +155,9 @@ export function create() {
 
     remove: function (): Promise<null> {
       // console.log('Remove Key Auth URL', data);
-      if (requestIntercepter !== undefined) {
-        server?.removeIntercept(requestIntercepter);
-        requestIntercepter = undefined;
+      if (requestInterceptor !== undefined) {
+        server?.removeIntercept(requestInterceptor);
+        requestInterceptor = undefined;
       }
       return Promise.resolve(null);
     },

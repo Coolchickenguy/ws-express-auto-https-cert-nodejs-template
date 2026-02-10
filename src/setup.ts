@@ -4,7 +4,6 @@ import { addSite, removeSite, getCerts, setup } from "./certTools.js";
 import * as configTools from "./config.js";
 import { giveServer } from "./http01auth.cjs";
 import listen from "./https.js";
-import EventEmitter from "events";
 // @ts-expect-error
 import U from "@root/greenlock/utils.js";
 const { _validMx } = U;
@@ -14,7 +13,7 @@ Object.freeze(oldConfig);
 // Use stderr because a setup is NOT an output
 const readlineInterface = readline.createInterface(
   process.stdin,
-  process.stderr
+  process.stderr,
 );
 // Use nextTick to avoid
 const log = (value: string) => readlineInterface.write(value + "\n");
@@ -22,7 +21,7 @@ log(`[${chalk.green("Server config")}]${chalk.redBright(":")}`);
 async function safeAsk(
   question: string,
   key: string,
-  validator: (value: string) => Promise<void> | void
+  validator: (value: string) => Promise<void> | void,
 ): Promise<void> {
   const responce: string = await readlineInterface.question(question);
   if (responce !== "") {
@@ -38,7 +37,7 @@ async function safeAsk(
     if (invalid) {
       log(invalid.toString());
       return await new Promise((resolve) =>
-        process.nextTick(() => resolve(safeAsk(question, key, validator)))
+        process.nextTick(() => resolve(safeAsk(question, key, validator))),
       );
     }
     config[key] = responce;
@@ -46,21 +45,21 @@ async function safeAsk(
     log(chalk.red("Please provide a value"));
     // Run on next tick to avoid stack overflow
     return await new Promise((resolve) =>
-      process.nextTick(() => resolve(safeAsk(question, key, validator)))
+      process.nextTick(() => resolve(safeAsk(question, key, validator))),
     );
   }
 }
 await safeAsk(
   `${chalk.red("Enter maintainer email")}${chalk.green.dim(
-    " (Used by cert library)"
+    " (Used by cert library)",
   )}`,
   "maintainerEmail",
   (value) =>
     new Promise((resolve, reject) =>
       _validMx(value)
         .catch(() => reject(new TypeError("Invalid email")))
-        .then(() => resolve())
-    )
+        .then(() => resolve()),
+    ),
 );
 // TODO: Add domain name checking
 await safeAsk(chalk.red("Enter site name"), "subject", () => {});
@@ -82,7 +81,7 @@ if (config.doCert) {
       // Don't provide a subject as by default, it uses a self-signed cert and it is only going to be used for http anyway
     },
     getCerts(""),
-    80
+    80,
   );
   server.unref();
   giveServer(server);

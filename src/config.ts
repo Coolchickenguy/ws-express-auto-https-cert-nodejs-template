@@ -14,5 +14,5 @@ export function getConfig(): { [key in string]?: any } {
 }
 export function setConfig(newConfig: { [key in string]?: any }): void {
   config = newConfig;
-  writeFileSync(configPath,JSON.stringify(config));
+  writeFileSync(configPath, JSON.stringify(config));
 }
