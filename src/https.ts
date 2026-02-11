@@ -1,9 +1,9 @@
 // A improved version of https://gist.github.com/Coolchickenguy/a424ab0f4d32f024b39cd8cdd2b912ae
 import tls from "tls";
 import http from "http";
-import { ServerOptions } from "https";
+import type { ServerOptions } from "https";
 import net from "net";
-//I use the word "proxy" but it doesn't create an additional request, it directly passes the data to the http server after decrypting it, essentially the same as what is internaly done inside the https module.
+//I use the word "proxy" but it doesn't create an additional request, it directly passes the data to the http server after decrypting it, essentially the same as what is internally done inside the https module.
 /**
  * Create a https server that redirects all http requests on the same port to it.
  * @param app Http request listener
@@ -98,7 +98,7 @@ export function listen(
   const makeInsecureServer = () =>
     http.createServer(options, function (req, res) {
       res.writeHead(302, {
-        location: `https://${req.headers.host || "localhost" + req.url}`,
+        location: `https://${(req.headers.host || "localhost") + req.url}`,
       });
       res.end();
     });
@@ -169,12 +169,12 @@ export function listen(
           options = newOptions;
         }
         /**
-         * The request intercepter function
+         * The request intercepted function
          */
-        // Use arrow function to avoid "this" being set to the server (I dont want to bind)
-        #intercepter = (socket: net.Socket) => {
+        // Use arrow function to avoid "this" being set to the server (I don't want to bind)
+        #interceptor = (socket: net.Socket) => {
           socket.once("data", (data: Buffer) => {
-            // Buffer incomeing data
+            // Buffer incoming data
             socket.pause();
             (async () => {
               for (const callback of this.interceptCallbacks) {
@@ -212,7 +212,7 @@ export function listen(
           this.interceptCallbacks.push(callbackFunction);
           if (tcpserver.listeners("connection")[0] === connectionListener) {
             tcpserver.removeListener("connection", connectionListener);
-            tcpserver.on("connection", this.#intercepter);
+            tcpserver.on("connection", this.#interceptor);
           }
         }
         /**
@@ -230,11 +230,11 @@ export function listen(
           );
           if (
             this.#interceptCallbacks.length === 0 &&
-            tcpserver.listeners("connection")[0] === this.#intercepter
+            tcpserver.listeners("connection")[0] === this.#interceptor
           ) {
             tcpserver.removeListener(
               "connection",
-              this.#intercepter as (
+              this.#interceptor as (
                 this: typeof this,
                 socket: net.Socket,
               ) => void,
@@ -255,7 +255,7 @@ export function listen(
           tcpserver.unref();
         }
         get requestInterceptor(): (socket: net.Socket) => void {
-          return this.#intercepter;
+          return this.#interceptor;
         }
         get secureServer(): http.Server {
           return server;
@@ -273,8 +273,17 @@ export function listen(
     ),
   );
   const dataHandler = (data: Buffer, socket: net.Socket) => {
-    // Detect if the provided handshake data is TLS by checking if it starts with 22, which TLS always does
-    if (data[0] === 22) {
+    const header = "16 03 01"
+      .split(" ")
+      .map((value) => parseInt(value, 16));
+
+    let isTls = true;
+    for (let index = 0; index < header.length; index++) {
+      if (data[index] !== header[index]) {
+        isTls = false;
+      }
+    }
+    if (isTls) {
       // Https
       // You may use this socket as a TLS socket, meaning you can attach this to the same http server
       var sock = new tls.TLSSocket(socket, {

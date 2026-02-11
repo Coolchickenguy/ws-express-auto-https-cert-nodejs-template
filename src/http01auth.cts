@@ -1,11 +1,12 @@
 "use strict";
 
 //var request;
-import path from "path";
-import http from "http";
-import { Duplex } from "stream";
-import { Socket } from "net";
-import { createServer } from "net";
+const path = require("path");
+const http = require("http");
+const { Duplex } = require("stream");
+import type { Socket } from "net";
+const { createServer } = require("net");
+
 type server = {
   /**
    * The function passed to the tcp server to intercept requests from the default callback
@@ -35,10 +36,10 @@ let server: server | undefined;
 let requestInterceptor:
   | ((request: Buffer, socket: Socket) => true | void | Promise<true | void>)
   | undefined;
-export function giveServer(inputServer: server) {
+module.exports.giveServer = function (inputServer: server) {
   server = inputServer;
-}
-export function create() {
+};
+module.exports.create = function () {
   return {
     init: function () {
       return Promise.resolve(null);
@@ -49,31 +50,34 @@ export function create() {
 
       var ch = data.challenge;
       if (server?.startIntercept) {
-        var httpServer = http.createServer(function (request, response) {
-          if (
-            request.url ===
-              path.posix.join("/.well-known/acme-challenge/", ch.token) ||
-            request.url ===
-              path.posix.join("/.well-known/acme-challenges/", ch.token)
-          ) {
-            response.end(ch.keyAuthorization);
-          } else {
-            // @ts-ignore
-            response.socket.write(Buffer.alloc(0));
-            // @ts-ignore
-            response.socket.end();
-          }
-        });
+        var httpServer = (http as typeof import("http")).createServer(
+          function (request, response) {
+            if (
+              request.url ===
+                path.posix.join("/.well-known/acme-challenge/", ch.token) ||
+              request.url ===
+                path.posix.join("/.well-known/acme-challenges/", ch.token)
+            ) {
+              response.end(ch.keyAuthorization);
+            } else {
+              // @ts-ignore
+              response.socket.write(Buffer.alloc(0));
+              // @ts-ignore
+              response.socket.end();
+            }
+          },
+        );
         requestInterceptor = (request, sock) => {
           return new Promise<void | true>(function (resolve) {
             const output: Buffer[] = [];
-            const captureStream = new Duplex({
-              read: function () {},
-              write: function (chunk, _encoding, cb) {
-                output.push(chunk);
-                cb();
-              },
-            });
+            const captureStream =
+              new (Duplex as typeof import("stream").Duplex)({
+                read: function () {},
+                write: function (chunk, _encoding, cb) {
+                  output.push(chunk);
+                  cb();
+                },
+              });
 
             httpServer.emit("connection", captureStream);
             captureStream.push(request);
@@ -112,14 +116,14 @@ export function create() {
       return new Promise(function (resolve) {
         const tcpServer = createServer(server?.requestInterceptor);
         // A pair of linked Duplex streams
-        const sock1: Duplex = new Duplex({
+        const sock1 = new (Duplex as typeof import("stream").Duplex)({
           read() {},
           write(chunk, encoding, cb) {
             sock2.push(chunk, encoding);
             cb();
           },
         });
-        const sock2 = new Duplex({
+        const sock2 = new (Duplex as typeof import("stream").Duplex)({
           read() {},
           write(chunk, encoding, cb) {
             sock1.push(chunk, encoding);
@@ -128,7 +132,7 @@ export function create() {
         });
         // Pass the server the first socket
         tcpServer.emit("connection", sock1);
-        http
+        (http as typeof import("http"))
           .request(
             {
               // Make the http server write the request to the tcp server
@@ -162,4 +166,4 @@ export function create() {
       return Promise.resolve(null);
     },
   };
-}
+};

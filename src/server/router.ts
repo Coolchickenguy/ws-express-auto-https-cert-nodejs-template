@@ -1,314 +1,258 @@
 // My own, simple router
-import { exsists } from "./types.js";
-import { isEmpty } from "./utils.js";
-const wildcard = Symbol("wildcard");
-type exsampleRouter = routerInstance<{
-  use: { satisfiyes: ["get", "post"] };
-  get: {};
-  post: {};
-}>;
-type route = {
+import type { entries } from "./types.js";
+type route<T> = {
   precedence: number;
-  name: string;
+  value: T;
 };
-type routePathNormal = {
-  [key: string]: { routes: route[]; children: routePath };
+type routeTee<T> = {
+  routes: route<T>[];
+  children: routePath<T>;
+  wildcards: routeTee<T>[];
+  segmentName: string | undefined;
 };
-type routePathWildcard = {
-  [key in typeof wildcard]?: routePathNormal[string];
+type routePath<T> = {
+  [K in string]?: routeTee<T>;
 };
-type routePath = routePathNormal & routePathWildcard;
-type routes = {
+type routes<T> = {
   [key: string]: {
-    satisfiyedBy: string[];
-    paths: routePath;
+    satisfies: string[];
+    paths: routeTee<T>;
   };
 };
+
 type routeTypesDescriptor = {
-  [key:string]: { satisfiyes?: string[] };
+  [key: string]: { satisfies?: string[] };
 };
 type getRouteTypes<rt> = [
   | keyof rt
   | Extract<
       rt[keyof rt],
-      { satisfiyes: readonly string[] | string[] }
-    >[][number]["satisfiyes"][number]
+      { satisfies: readonly string[] | string[] }
+    >[][number]["satisfies"][number],
 ][number];
-type routerInstance<rt = routeTypesDescriptor> = {
-  /**
-   * The internal route structure of the router
-   * @private
-   */
-  _routes: routes;
-  /**
-   * The next precedence to use
-   * @private
-   */
-  _precedenceIndex: number;
-  /**
-   * Pare path into array
-   * @param path The path to parse
-   */
-  _parsePath(path: string): string[];
-  /* 
-  /**
-   * If the router has been modifyid since the last build.
-   * @private
-   */
-  _modifyed: boolean;
-  /**
-   * Build the router object. This is by defaut automaticly called when the object is used and there has been a change.
-   */
-  build(): void;
-  /**
-   *
-   * @param path A path to get the routes for.
-   * @param type The path type.
-   */
-  getRoutes(path: string, type: getRouteTypes<rt>): any[];
-  routes: {
-    [key in getRouteTypes<rt>]: exsists<rt, key, {}> & {
-      /**
-       * The paths of the route type. The first value is the parth and the second is the value to pass back after the route being chosen by the router.
-       */
-      paths: [string, any][];
-    };
+type PublicRoutes<descriptor extends routeTypesDescriptor> = {
+  [key in getRouteTypes<descriptor>]: descriptor[key] & {
+    /**
+     * The paths of the route type. The first value is the path and the second is the value to pass back after the route being chosen by the router. The third is the presence (higher means will be further back in the results)
+     */
+    paths: { path: string; value: any; precedence: number }[];
   };
 };
-interface router {
-  /**
-   * Create a request router.
-   * @param routeTypes The route type descriptor. Defaults to
-   * {
-   * use: { satisfiyes: ["get", "post"] },
-   * get: {},
-   * post: {},
-   * }
-   * @param autoBuild Rebuild the router before useing a matcher if it has been modifyed. May not be changed after creation. Defaults to true.
-   */
-  new <const rt extends routeTypesDescriptor = routeTypesDescriptor>(
-    routeTypes?: rt,
-    autoBuild?: boolean
-  ): routerInstance<rt>;
-  /**
-   * Create a request router.
-   * @param routeTypes The route type descriptor. Defaults to
-   * {
-   * use: { satisfiyes: ["get", "post"] },
-   * get: {},
-   * post: {},
-   * }
-   * @param autoBuild Rebuild the router before useing a matcher if it has been modifyed. May not be changed after creation. Defaults to true.
-   */
-  <
-    const rt extends routeTypesDescriptor = {
-      use: { satisfiyes: ["get", "post"] };
-      get: {};
-      post: {};
-    }
-  >(
-    routeTypes?: rt,
-    autoBuild?: boolean
-  ): routerInstance<rt>;
-}
-export const router = function requestRouter(
-  this: typeof requestRouter.prototype | undefined,
-  routeTypes: routeTypesDescriptor = {
-    use: { satisfiyes: ["get", "post"] },
-    get: {},
-    post: {},
-  },
-  autoBuild: boolean = true
-): void | router["prototype"] {
-  if (!(this instanceof router)) {
-    return new router(routeTypes, autoBuild);
-  }
-  var changeModifyed = (nv: boolean) => (this._modifyed = nv);
-  // @ts-ignore
-  this.routes = Object.fromEntries(
-    [
-      ...new Set(
-        Object.entries(routeTypes)
-          .map(([key, value = {}]) => [key, value.satisfiyes || []])
-          .flat(2)
-      ),
-    ].map((val) => [
-      val,
-      {
-        paths: autoBuild
-          ? new Proxy([] as string[], {
-              set(target, p, newValue) {
-                target[p as unknown as number] = newValue;
-                changeModifyed(true);
-                return true;
-              },
-            })
-          : [],
-        ...(val in routeTypes && "satisfiyes" in routeTypes[val]
-          ? // @ts-ignore
-            { satisfiyes: routeTypes[val].satisfiyes }
-          : {}),
-      },
-    ])
-  );
-} as any as router;
-router.prototype._routes = {};
-router.prototype._parsePath = function (path: string) {
-  return (path.replace(/\/$/m, "") || "/").split("/");
-};
-router.prototype._precedenceIndex = 0;
-// Avoid lag by converting routes into more easly prossesable form.
-router.prototype.build = function (this: exsampleRouter): void {
-  var entries = Object.entries(
-    Object.entries(this.routes).reduce(
-      (last, [key, value]) => {
-        if ("satisfiyes" in value) {
-          value.satisfiyes.forEach((val) =>
-            "satisfiyedBy" in last[val]
-              ? last[val].satisfiyedBy?.push(key)
-              : (last[val].satisfiyedBy = [key])
-          );
-        }
-        if (!("satisfiyedBy" in last[key])) {
-          last[key].satisfiyedBy = [];
-        }
-        return last;
-      },
-      this.routes as {
-        [key in string]: {
-          satisfiyes?: string[];
-          satisfiyedBy?: string[];
-          paths: [string, any][];
-        };
-      }
-    )
-  );
-  this._routes = Object.fromEntries(
-    entries.map(([key, value]) => {
-      var out: routePath =
-        {};
-      value.paths.forEach((val) => {
-        const parsed = this._parsePath(
-          val[0].replace(/(?<=\/)\*$/, ":asterisk")
-        );
-        //console.log(parsed);
-        var outRef: any = out;
-        parsed.forEach((parsedString: string | typeof wildcard, i) => {
-          if ((parsedString as string).startsWith(":")) {
-            parsedString = wildcard;
-          }
-          if (!(parsedString in outRef)) {
-            outRef[parsedString] = { routes: [], children: {} };
-          }
-          //console.log(outRef);
-          if (i < parsed.length - 1) {
-            outRef = outRef[parsedString].children;
-          } else {
-            outRef = outRef[parsedString];
-          }
-        });
-        // console.log(outRef);
-        outRef.routes.push({
-          precedence: this._precedenceIndex++,
-          name: val[1],
-        });
-      });
-      this._modifyed = false;
-      return [
-        key,
-        {
-          paths: out,
-          ...("satisfiyedBy" in value
-            ? { satisfiyedBy: value.satisfiyedBy }
-            : { satisfiyedBy: [] }),
-        },
-      ] as [typeof key, { paths: typeof out; satisfiyedBy: string[] }];
-    })
-  );
-};
-function routeGeter(
-  parsed: string[],
-  route: routePath[string]
-): route[] {
-  let output: route[][] = [];
-  for (let i = 0; i < parsed.length && route !== undefined;i++) {
-    output.push(route.routes);
-    if(wildcard in route.children){
-      output.push(routeGeter(parsed.slice(i+1),route.children[wildcard] as routePathNormal[string]));
-    }
-    route = route.children[parsed[i]];
-  }
-  output.push(route?.routes ?? []);
-  return output.flat(1);
-}
 
-router.prototype.getRoutes = function (
-  this: exsampleRouter,
-  path: string,
-  type: string
-): any[] {
-  var parsed = this._parsePath(path);
-  if (this._modifyed) {
+export class requestRouter<routesDescriptor extends routeTypesDescriptor, T> {
+  _routes: routes<T> = {};
+  _parsePath(path: string) {
+    return path.split("/").filter(Boolean); // Remove empty segments
+  }
+  _precedenceIndex = 0;
+  _modified = true;
+  routes: PublicRoutes<routesDescriptor>;
+  /**
+   * Create a request router.
+   * @param routeTypes The route type descriptor. Defaults to
+   * {
+   * use: { satisfies: ["get", "post"] },
+   * get: {},
+   * post: {},
+   * }
+   * @param autoBuild Rebuild the router before using a matcher if it has been modified. May not be changed after creation. Defaults to true.
+   */
+  constructor(
+    routeTypes: routeTypesDescriptor = {
+      use: { satisfies: ["get", "post"] },
+      get: {},
+      post: {},
+    },
+    autoBuild: boolean = true,
+  ) {
+    const changeModified = (newValue: boolean) => (this._modified = newValue);
+
+    const routeTypeEntries = Object.entries(routeTypes);
+    // Initialize .routes
+    {
+      const routes: PublicRoutes<routeTypesDescriptor> = {};
+      for (const [typeName, info] of routeTypeEntries) {
+        const pathsValue = autoBuild
+          ? new Proxy(
+              [] as PublicRoutes<routeTypesDescriptor>[string]["paths"],
+              {
+                set(target, p, newValue) {
+                  target[p as any] = newValue;
+                  changeModified(true);
+                  return true;
+                },
+              },
+            )
+          : [];
+        routes[typeName] = { satisfies: info["satisfies"], paths: pathsValue };
+      }
+      this.routes = routes as PublicRoutes<routesDescriptor>;
+    }
+    // Initialize ._routes
     this.build();
   }
-  var routeNames = [type, ...this._routes[type].satisfiyedBy];
-  return routeNames
-    .reduce((lastVal, routeName) => {
-      var route = this._routes[routeName].paths;
-      if (isEmpty(route)) {
-        return lastVal;
+  build(): void {
+    const routeEntries = Object.entries(this.routes) as entries<
+      typeof this.routes
+    >[];
+    this._routes = {};
+    // Pass 1: Fill out routes with everything but the satisfiedBy filled out
+    for (const [method, data] of routeEntries) {
+      this._routes[method as string] = {
+        satisfies: data.satisfies ?? [],
+        paths: {
+          routes: [],
+          children: {},
+          wildcards: [],
+          segmentName: undefined,
+        },
+      };
+
+      for (const { path, value, precedence } of data.paths) {
+        const parsed = this._parsePath(path);
+        let ref = this._routes[method as string]["paths"];
+        for (const pathSegment of parsed) {
+          if (pathSegment === "*" || pathSegment.startsWith(":")) {
+            const segmentName = pathSegment.startsWith(":")
+              ? pathSegment.slice(1)
+              : undefined;
+            const entry: routeTee<T> = {
+              routes: [],
+              children: {},
+              wildcards: [],
+              segmentName,
+            };
+            ref["wildcards"].push(entry);
+            ref = entry;
+          } else {
+            ref["children"][pathSegment] ??= {
+              routes: [],
+              children: {},
+              wildcards: [],
+              segmentName: undefined,
+            };
+            ref = ref["children"][pathSegment];
+          }
+        }
+        ref.routes.push({ value, precedence });
       }
-      lastVal.push(
-        ...routeGeter(parsed, {children:route,routes:[]})
-      );
-      return lastVal;
-    }, [] as route[])
-    .sort((a, b) => (a.precedence > b.precedence ? 1 : -1))
-    .map((val) => val.name);
-};
-router.prototype._modifyed = true;
+    }
+  }
+  getRoutes(
+    path: string,
+    type: string,
+  ): {
+    item: route<T>;
+    env: {
+      [name: string]: string;
+    };
+  }[] {
+    const parsed = this._parsePath(path);
+    if (this._modified) {
+      // This is not set if we are not in auto-build mode, so this is ok
+      this.build();
+    }
+    function walk(
+      item: routeTee<T>,
+      path: string[],
+      env: { [name: string]: string } = {},
+      fork: number = 0,
+    ): { item: route<T>; env: { [name: string]: string } }[] {
+      let ref = item;
+      let results: { item: route<T>; env: { [name: string]: string } }[] = [];
+      function wildcards({
+        segment,
+        index,
+      }: {
+        segment: string;
+        index: number;
+      }) {
+        for (const wildcard of ref?.wildcards ?? []) {
+          const newEnv = { ...env };
+          if (wildcard.segmentName) {
+            if (wildcard.segmentName in env) {
+              throw new Error(
+                `Duplicate named wildcard ${wildcard.segmentName}`,
+              );
+            }
+            newEnv[wildcard.segmentName] = segment;
+          }
+          results.push(...walk(wildcard, path.slice(index), newEnv, fork + 1));
+        }
+      }
+      function handleRoutes() {
+        results.push(
+          ...ref.routes.map((item) => ({
+            env: { ...env }, // clone JUST IN CASE
+            item,
+          })),
+        );
+      }
+      // Add all "root" paths
+      handleRoutes();
+
+      for (let index = 0; index < path.length; index++) {
+        const segment = path[index];
+        // Add all of the wildcards don't check for this path segment
+        wildcards({ segment, index });
+
+        const tee = ref["children"][segment];
+        if (!tee) {
+          // If the path segment is not present we can not go any further
+          return results;
+        }
+
+        ref = tee;
+        // Add all of the paths that encompass all children of this node
+        handleRoutes();
+      }
+
+      return results;
+    }
+    const satisfies = this._routes[type].satisfies;
+    const satisfiesPaths = satisfies.map((key) => this._routes[key].paths);
+    const results: ReturnType<typeof walk>[] = [];
+    for (const walkable of [...satisfiesPaths, this._routes[type].paths]) {
+      results.push(walk(walkable, parsed));
+    }
+    return results
+      .flat(1)
+      .sort((a, b) => a.item.precedence - b.item.precedence);
+  }
+}
 /*
-var routerDemo = new router({
-  use: { satisfiyes: ["get", "post"] },
+// TESTS
+var routerDemo = new requestRouter({
+  use: { satisfies: ["get", "post"] },
   get: {},
   post: {},
 });
-//console.log(routerDemo.routes);
-//routerDemo.routes.use.paths.push("/chicken/index.html");
-routerDemo.routes.use.paths.push([
-  "/chicken/bocks/no",
-  "The no chicken bocks path!! Must include",
-]);
-routerDemo.routes.use.paths.push([
+let idx = 0;
+function add(type: string, path: string, item: unknown) {
+  routerDemo.routes[type].paths.push({ path, value: item, precedence: idx++ });
+}
+
+add("use", "/chicken/bocks/no", "The no chicken bocks path!! Must include");
+add(
+  "use",
   "/chicken/bocks/no/brook.html",
   "The brook html file. Must include.",
-]);
-routerDemo.routes.use.paths.push([
-  "/chicken/bocks",
-  "chicken bocks root of use. Must include.",
-]);
-routerDemo.routes.get.paths.push([
-  "/chicken/bocks",
-  "the chicken bocks root of get. Must include.",
-]);
-routerDemo.routes.get.paths.push([
-  "/:chickenrelated/bocks/no/:file",
-  "A wildcard. Must include.",
-]);
-routerDemo.routes.get.paths.push(["/chicken/:bocks/no/:file", "A wildcard2. Must include."]);
-routerDemo.routes.get.paths.push(["/hi", "A unused GET path. Must not include."]);
-routerDemo.routes.get.paths.push(["/hi/:any", "A unused GET path with wildcards. Must not include."]);
-routerDemo.routes.get.paths.push([
-  "/chicken/bocks/no/*",
-  "A end wildcard that is TRUE. Must include.",
-]);
-routerDemo.routes.get.paths.push([
+);
+add("use", "/chicken/bocks", "chicken bocks root of use. Must include.");
+
+add("get", "/chicken/bocks", "the chicken bocks root of get. Must include.");
+add("get", "/:chickenrelated/bocks/no/:file", "A wildcard. Must include.");
+add("get", "/chicken/:bocks/no/:file", "A wildcard2. Must include.");
+add("get", "/hi", "A unused GET path. Must not include.");
+add("get", "/hi/:any", "A unused GET path with wildcards. Must not include.");
+add("get", "/chicken/bocks/no/*", "A end wildcard that is TRUE. Must include.");
+add(
+  "get",
   "/chicken/bocks/no/brook.html/*",
   "A end wildcard that is FALSE. Must NOT include.",
-]);
-routerDemo.routes.get.paths.push(["/", "root"]);
+);
+add("get", "/", "root, MUST INCLUDE");
 routerDemo.build();
-//console.log(routerDemo._routes.get.paths,"wildcard");
 console.log(routerDemo.getRoutes("/chicken/bocks/no/brook.html", "get"));
 console.log(JSON.stringify(routerDemo._routes));
 */

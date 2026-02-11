@@ -7,25 +7,25 @@ export default async function main(
   app: express.Express,
   ws: wsRouter,
 ): Promise<void> {
-  ws.websocket("/api/v1/websocket/echo", function (req, socket) {
-    socket.on("message", function (data, isBinary) {
-      socket.send(data, { binary: isBinary });
+  ws.do("websocket", "/api/v1/websocket/echo", function ({ response }) {
+    response.on("message", function (data, isBinary) {
+      response.send(data, { binary: isBinary });
     });
   });
   const broadcastEmitter = new EventEmitter();
 
-  ws.websocket("/api/v1/websocket/broadcast", function (req, socket) {
+  ws.do("websocket", "/api/v1/websocket/broadcast", function ({ response }) {
     const us = Symbol();
-    socket.on("message", function (data, isBinary) {
+    response.on("message", function (data, isBinary) {
       broadcastEmitter.emit("data", [us, data]);
     });
     const broadcastListener = ([who, data]: [symbol, WebSocket.RawData]) => {
       if (who !== us) {
-        socket.send(data);
+        response.send(data);
       }
     };
     broadcastEmitter.on("data", broadcastListener);
-    socket.once("close", () => {
+    response.once("close", () => {
       broadcastEmitter.removeListener("data", broadcastListener);
     });
   });

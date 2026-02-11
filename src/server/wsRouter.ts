@@ -1,29 +1,48 @@
-import { router } from "./router.js";
+import { requestRouter } from "./router.js";
 import type ws from "ws";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import type { Duplex } from "stream";
 type callbackFunction = (
-  req: IncomingMessage,
-  socket: WebSocket,
+  context: {
+    request: IncomingMessage;
+    response: WebSocket;
+    parameters: { path: { [key: string]: string } };
+  },
   next: () => void,
 ) => void | Promise<void>;
 export class wsRouter {
-  _router: ReturnType<typeof router<{ ws: {"satisfies": ["websocket"]}, wss: {"satisfies": ["websocket"]}, websocket: {} }>>;
+  _router: requestRouter<
+    {
+      ws: { satisfies: ["websocket"] };
+      wss: { satisfies: ["websocket"] };
+      websocket: {};
+    },
+    callbackFunction
+  >;
+  _precedence: number = 0;
   _websocketServer: WebSocketServer;
   constructor() {
-    this._router = new router({ ws: {"satisfies": ["websocket"]}, wss: {"satisfies": ["websocket"]}, websocket: {} });
+    this._router = new requestRouter({
+      ws: { satisfies: ["websocket"] },
+      wss: { satisfies: ["websocket"] },
+      websocket: { satisfies: [] },
+    });
     this._websocketServer = new WebSocketServer({ noServer: true });
   }
-  ws(path: string, listener: callbackFunction) {
-    this._router.routes.ws.paths.push([path, listener]);
+
+  do(
+    type: keyof typeof this._router.routes,
+    path: string,
+    listener: callbackFunction,
+  ) {
+    this._router.routes[type].paths.push({
+      path,
+      precedence: this._precedence++,
+      value: listener,
+    });
   }
-  wss(path: string, listener: callbackFunction) {
-    this._router.routes.wss.paths.push([path, listener]);
-  }
-  websocket(path: string, listener: callbackFunction) {
-    this._router.routes.websocket.paths.push([path, listener])
-  }
+
   async upgradeHandler(
     isSecure: boolean,
     request: IncomingMessage,
@@ -33,7 +52,7 @@ export class wsRouter {
     const routes = this._router.getRoutes(
       request.url as string,
       isSecure ? "wss" : "ws",
-    ) as callbackFunction[];
+    );
     if (routes.length === 0) {
       requestSocket.destroy();
       return;
@@ -58,9 +77,17 @@ export class wsRouter {
     socket.on("pong", () => (isAlive = true));
     const run = async () => {
       try {
-        await (routes.shift() || (() => {}))(request, socket, () =>
-          process.nextTick(run),
-        );
+        const route = routes.shift();
+        if (route) {
+          await route.item.value(
+            {
+              request,
+              response: socket,
+              parameters: { path: route.env },
+            },
+            () => queueMicrotask(run),
+          );
+        }
       } catch (e) {
         console.error(e);
         socket.close(1011);
