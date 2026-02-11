@@ -60,7 +60,7 @@
         } else {
           data = event.data;
         }
-        addMessage();
+        addMessage(data);
       });
 
       socket.addEventListener("close", () => {
